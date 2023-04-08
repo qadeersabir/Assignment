@@ -31,6 +31,7 @@ class MerchantService
         ]);
 
         $merchant = Merchant::create([
+
             'user_id' => $user->id,
             'domain' => $data['domain'],
             'display_name' => $data['name'],

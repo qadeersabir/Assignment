@@ -25,37 +25,48 @@ class OrderService
     public function processOrder(array $data)
     {
         // TODO: Complete this method
-        // Check if an affiliate with the given email already exists
-        $affiliate = Affiliate::where('email', $data['customer_email'])->first();
-        $merchant = Merchant::first();
-        if (!$affiliate) {
-            // If not, create a new affiliate associated with the merchant
-            $affiliate = $this->affiliateService->register(
-                $merchant,
-                $data['customer_email'],
-                $data['customer_name'],
-                0.1 // Default commission rate for new affiliates
-            );
-        }
+        $order = Order::where('external_order_id', $data['order_id'])->first();
 
-        // Check if an order with the given order_id already exists
-        if (Order::where('external_order_id', $data['order_id'])->exists()) {
-            // If so, return without processing the order any further
+        if ($order) {
             return;
         }
 
-        // Create a new order and associate it with the merchant and affiliate
-        $order = new Order();
-        $order->subtotal = $data['subtotal_price'];
-        $order->merchant_id = $merchant->id;
-        $order->affiliate_id = $affiliate->id;
-        $order->external_order_id = $data['order_id'];
-        if ($data['discount_code']) {
-            // Associate the discount code with the order if provided
-            $order->discount_code = $data['discount_code'];
+        $merchant = Merchant::where('domain', $data['merchant_domain'])->firstOrFail();
+
+        $affiliate = Affiliate::where('merchant_id', $merchant->id)
+            ->where('discount_code', $data['discount_code'])
+            ->first();
+
+        if (!$affiliate) {
+            $affiliate = new Affiliate([
+                'merchant_id' => $merchant->id,
+                'discount_code' => $data['discount_code'],
+                'commission_rate' => 0.1
+            ]);
+            $affiliate->save();
         }
+
+        $customer = User::where('email', $data['customer_email'])->first();
+
+        if (!$customer) {
+            $customer = new User([
+                'name' => $data['customer_name'],
+                'email' => $data['customer_email'],
+                'type' => User::TYPE_AFFILIATE,
+            ]);
+            $customer->save();
+        }
+
+        $order = new Order([
+            'subtotal' => $data['subtotal_price'],
+            'affiliate_id' => $affiliate->id,
+            'merchant_id' => $merchant->id,
+            'commission_owed' => $data['subtotal_price'] * $affiliate->commission_rate,
+            'external_order_id' => $data['order_id']
+        ]);
         $order->save();
 
+        $this->affiliateService->register($merchant, $data['customer_email'], $data['customer_name'], 0.1);
     }
 
 

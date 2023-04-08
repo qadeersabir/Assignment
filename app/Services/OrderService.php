@@ -27,10 +27,11 @@ class OrderService
         // TODO: Complete this method
         // Check if an affiliate with the given email already exists
         $affiliate = Affiliate::where('email', $data['customer_email'])->first();
+        $merchant = Merchant::first();
         if (!$affiliate) {
             // If not, create a new affiliate associated with the merchant
             $affiliate = $this->affiliateService->register(
-                $this->merchant,
+                $merchant,
                 $data['customer_email'],
                 $data['customer_name'],
                 0.1 // Default commission rate for new affiliates
@@ -46,7 +47,7 @@ class OrderService
         // Create a new order and associate it with the merchant and affiliate
         $order = new Order();
         $order->subtotal = $data['subtotal_price'];
-        $order->merchant_id = $this->merchant->id;
+        $order->merchant_id = $merchant->id;
         $order->affiliate_id = $affiliate->id;
         $order->external_order_id = $data['order_id'];
         if ($data['discount_code']) {
@@ -55,9 +56,6 @@ class OrderService
         }
         $order->save();
 
-        // Calculate and log the commission for the affiliate
-        $commission = $data['subtotal_price'] * $affiliate->commission_rate;
-        $this->affiliateService->logCommission($affiliate, $commission);
     }
 
 

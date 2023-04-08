@@ -23,19 +23,18 @@ class MerchantService
     {
         // TODO: Complete this method
 
-        $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => $data['api_key'],
-            'type' => User::TYPE_MERCHANT,
-        ]);
+        $user=new User();
+        $user->name=$data['name'];
+        $user->email=$data['email'];
+        $user->password=$data['api_key'];
+        $user->type=User::TYPE_MERCHANT;
+        $user->save();
 
-        $merchant = Merchant::create([
-
-            'user_id' => $user->id,
-            'domain' => $data['domain'],
-            'display_name' => $data['name'],
-        ]);
+        $merchant=new Merchant();
+        $merchant->user_id=$user->id;
+        $merchant->domain=$data['domain'];
+        $merchant->display_name=$data['name'];
+        $merchant->save();
 
         return $merchant;
     }

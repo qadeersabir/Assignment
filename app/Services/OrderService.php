@@ -25,58 +25,40 @@ class OrderService
     public function processOrder(array $data)
     {
         // TODO: Complete this method
-        // Check if there is an existing order with the same external_order_id
-        $orderExists = Order::where('external_order_id', $data['order_id'])->exists();
-        if ($orderExists) {
-            return; // Ignore duplicate orders
-        }
-
-        $merchant = Merchant::where('domain', $data['merchant_domain'])->first();
-        if (!$merchant) {
-            return; // Ignore orders from unknown merchants
-        }
-
-        $customerEmail = $data['customer_email'];
-        $customerName = $data['customer_name'];
-
-        // Check if the customer email is associated with an existing affiliate
-        $affiliate = Affiliate::where('merchant_id', $merchant->id)
-            ->where('customer_email', $customerEmail)
-            ->first();
-
+        // Check if an affiliate with the given email already exists
+        $affiliate = Affiliate::where('email', $data['customer_email'])->first();
         if (!$affiliate) {
-            // If there is no existing affiliate, create a new one
-            $discountCode = $data['discount_code'] ?? $this->generateDiscountCode();
-            $affiliate = Affiliate::create([
-                'user_id' => $merchant->id,
-                'merchant_id' => $merchant->id,
-                'customer_email' => $customerEmail,
-                'customer_name' => $customerName,
-                'discount_code' => $discountCode,
-                'commission_rate' => 0.1,
-            ]);
-
-            // Register the new affiliate with the affiliate service
-            $this->affiliateService->register($merchant, $customerEmail, $customerName, 0.1);
+            // If not, create a new affiliate associated with the merchant
+            $affiliate = $this->affiliateService->register(
+                $this->merchant,
+                $data['customer_email'],
+                $data['customer_name'],
+                0.1 // Default commission rate for new affiliates
+            );
         }
 
-        // Log the order and commission information
-        $subtotal = $data['subtotal_price'];
-        $commissionRate = $affiliate->commission_rate;
-        $commissionOwed = $subtotal * $commissionRate;
+        // Check if an order with the given order_id already exists
+        if (Order::where('external_order_id', $data['order_id'])->exists()) {
+            // If so, return without processing the order any further
+            return;
+        }
 
-        Order::create([
-            'external_order_id' => $data['order_id'],
-            'subtotal' => $subtotal,
-            'commission_owed' => $commissionOwed,
-            'merchant_id' => $merchant->id,
-            'affiliate_id' => $affiliate->id,
-        ]);
+        // Create a new order and associate it with the merchant and affiliate
+        $order = new Order();
+        $order->subtotal = $data['subtotal_price'];
+        $order->merchant_id = $this->merchant->id;
+        $order->affiliate_id = $affiliate->id;
+        $order->external_order_id = $data['order_id'];
+        if ($data['discount_code']) {
+            // Associate the discount code with the order if provided
+            $order->discount_code = $data['discount_code'];
+        }
+        $order->save();
+
+        // Calculate and log the commission for the affiliate
+        $commission = $data['subtotal_price'] * $affiliate->commission_rate;
+        $this->affiliateService->logCommission($affiliate, $commission);
     }
 
-    private function generateDiscountCode(): string
-    {
-        // Generate a random discount code
-        return substr(md5(rand()), 0, 8);
-    }
+
 }
